@@ -22,7 +22,7 @@ func respError(c *gin.Context, status int, err error) {
 
 func Build(c *gin.Context) {
 	globalName := c.Query("globalName")
-	pkg := c.Query("pkg")
+	pkg := c.Param("pkg")
 	// force rebuild
 	force := c.Query("force")
 	isForce := force != ""
