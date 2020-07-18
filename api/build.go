@@ -63,7 +63,12 @@ func getRequiredPkg(parsed [3]string) string {
 	return fmt.Sprintf("%s/%s", parsed[0], parsed[1])
 }
 
-func build(pkg string, outDir string, globalName string, projectDir string, outFile string) (interface{}, error) {
+func pathExists(p string) bool {
+	_, err := os.Stat(p)
+	return !os.IsNotExist(err)
+}
+
+func build(pkg, globalName, projectDir, outDir, outFile string) (interface{}, error) {
 	log.Printf("trigger build %s, %s", pkg, time.Now())
 	// Install the package
 	log.Println("Installing", pkg, "in", outDir)
@@ -122,10 +127,10 @@ func build(pkg string, outDir string, globalName string, projectDir string, outF
 }
 
 func Build(c *gin.Context) {
-	globalName := c.Query("globalName")
+	globalName := strings.TrimSpace(c.Query("globalName"))
 	pkg := c.Param("pkg")
 	// force rebuild
-	force := c.Query("force")
+	force := strings.TrimSpace(c.Query("force"))
 	isForce := force != ""
 
 	if globalName == "" {
@@ -134,31 +139,32 @@ func Build(c *gin.Context) {
 	}
 
 	pkg = strings.TrimLeft(pkg, "/")
+	key := fmt.Sprintf("%s-%s", pkg, globalName)
 
-	projectDir := path.Join(os.TempDir(), pkg)
+	projectDir := path.Join(os.TempDir(), key)
 	outDir := path.Join(projectDir, "out")
 
-	os.MkdirAll(outDir, os.ModePerm)
+	if !pathExists(outDir) {
+		os.MkdirAll(outDir, os.ModePerm)
+	}
 
 	outFile := path.Join(outDir, "input.js")
 
 	// cache
-	if _, err := os.Stat(outFile); !os.IsNotExist(err) && !isForce {
+	if !isForce && pathExists(outFile) {
 		file, err := os.Open(outFile)
 		if err != nil {
 			logError(err, "open cache file error")
 			respError(c, 500, err)
 			return
 		}
-		defer file.Close()
 		log.Printf("return cached file: %s\n", outFile)
-		c.Header("content-type", "application/javascript")
 		io.Copy(c.Writer, file)
 		return
 	}
 
-	content, err, _ := g.Do(pkg, func() (interface{}, error) {
-		return build(pkg, outDir, globalName, projectDir, outFile)
+	content, err, _ := g.Do(key, func() (interface{}, error) {
+		return build(pkg, globalName, projectDir, outDir, outFile)
 	})
 
 	if err != nil {
