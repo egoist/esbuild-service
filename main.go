@@ -2,13 +2,16 @@ package main
 
 import (
 	"log"
-	"net/http"
 
 	handler "github.com/egoist/esbuild-service/api"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	r := gin.Default()
+
+	r.GET("/build", handler.Build)
+
 	log.Println("Open http://localhost:8080")
-	http.HandleFunc("/", handler.Handler)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(r.Run(":8080"))
 }
