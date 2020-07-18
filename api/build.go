@@ -21,6 +21,10 @@ func respError(c *gin.Context, status int, err error) {
 	})
 }
 
+func logError(err error, prefix string) {
+	log.Printf("error %s %s\n", prefix, err.Error())
+}
+
 func Build(c *gin.Context) {
 	globalName := c.Query("globalName")
 	pkg := c.Param("pkg")
@@ -46,7 +50,7 @@ func Build(c *gin.Context) {
 	if _, err := os.Stat(outFile); !os.IsNotExist(err) && !isForce {
 		file, err := os.Open(outFile)
 		if err != nil {
-			log.Println(err)
+			logError(err, "open cache file error")
 			respError(c, 500, err)
 			return
 		}
@@ -62,16 +66,16 @@ func Build(c *gin.Context) {
 	cc := exec.Command("node", "--version")
 	out, err := cc.Output()
 	if err != nil {
-		log.Println(err)
+		logError(err, "get node version")
 		respError(c, 500, err)
 		return
 	}
-	log.Println(out)
+	log.Printf("node version %s\n", out)
 	cmd := exec.Command("yarn", "add", pkg)
 	cmd.Dir = projectDir
 	_, err = cmd.Output()
 	if err != nil {
-		log.Println("failed to install pkg", err)
+		logError(err, "failed to install pkg")
 		respError(c, 500, err)
 		return
 	}
