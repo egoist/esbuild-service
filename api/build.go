@@ -65,7 +65,6 @@ func getRequiredPkg(parsed [3]string) string {
 
 func build(pkg string, outDir string, globalName string, projectDir string, outFile string) (interface{}, error) {
 	log.Printf("trigger build %s, %s", pkg, time.Now())
-	time.Sleep(time.Second * 10)
 	// Install the package
 	log.Println("Installing", pkg, "in", outDir)
 	cc := exec.Command("node", "--version")
@@ -158,7 +157,6 @@ func Build(c *gin.Context) {
 		return
 	}
 
-	// 
 	content, err, _ := g.Do(pkg, func() (interface{}, error) {
 		return build(pkg, outDir, globalName, projectDir, outFile)
 	})
