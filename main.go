@@ -1,9 +1,8 @@
 package main
 
 import (
-	"log"
-
 	handler "github.com/egoist/esbuild-service/api"
+	"github.com/egoist/esbuild-service/logger"
 	"github.com/gin-gonic/gin"
 )
 
@@ -12,6 +11,6 @@ func main() {
 
 	r.GET("/build/*pkg", handler.Build)
 
-	log.Println("Open http://localhost:8080")
-	log.Fatal(r.Run(":8080"))
+	logger.Logger.Info("Open http://localhost:8080")
+	logger.Logger.Fatal(r.Run(":8080"))
 }

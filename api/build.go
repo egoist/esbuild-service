@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/egoist/esbuild-service/logger"
 
 	"golang.org/x/sync/singleflight"
 
@@ -21,6 +22,7 @@ import (
 )
 
 var g singleflight.Group
+var log = logger.Logger
 
 var (
 	reScoped = regexp.MustCompile("^(@[^/]+/[^/@]+)(?:/([^@]+))?(?:@([^/]+))?")
@@ -34,7 +36,7 @@ func respError(c *gin.Context, status int, err error) {
 }
 
 func logError(err error, prefix string) {
-	log.Printf("error %s %s\n", prefix, err.Error())
+	log.Errorf("error %s %s\n", prefix, err.Error())
 }
 
 func parsePkgName(pkg string) [3]string {
