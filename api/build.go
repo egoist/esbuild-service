@@ -16,8 +16,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var pkgReg = regexp.MustCompile("^((?:@([^/]+?)[/])?[^/]+?)(@[^/]+?)?$")
-
 var (
 	reScoped = regexp.MustCompile("^(@[^/]+/[^/@]+)(?:/([^@]+))?(?:@([^/]+))?")
 	reNormal = regexp.MustCompile("^([^/@]+)(?:/([^@]+))?(?:@([^/]+))?")
