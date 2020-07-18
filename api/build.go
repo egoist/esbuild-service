@@ -9,11 +9,14 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/evanw/esbuild/pkg/api"
 	"github.com/gin-gonic/gin"
 )
+
+var pkgReg = regexp.MustCompile("^((?:@([^/]+?)[/])?[^/]+?)(@[^/]+?)?$")
 
 func respError(c *gin.Context, status int, err error) {
 	c.JSON(status, gin.H{
@@ -23,6 +26,10 @@ func respError(c *gin.Context, status int, err error) {
 
 func logError(err error, prefix string) {
 	log.Printf("error %s %s\n", prefix, err.Error())
+}
+
+func removePkgVersion(pkg string) string {
+	return pkgReg.ReplaceAllString(pkg, "$1")
 }
 
 func Build(c *gin.Context) {
@@ -81,7 +88,7 @@ func Build(c *gin.Context) {
 	}
 
 	inputFile := path.Join(projectDir, "input.js")
-	input := fmt.Sprintf("module.exports = require('%s')", pkg)
+	input := fmt.Sprintf("module.exports = require('%s')", removePkgVersion(pkg))
 	ioutil.WriteFile(inputFile, []byte(input), os.ModePerm)
 
 	result := api.Build(api.BuildOptions{
