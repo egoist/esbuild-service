@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 
 	"github.com/evanw/esbuild/pkg/api"
 	"github.com/gin-gonic/gin"
@@ -27,10 +28,12 @@ func Build(c *gin.Context) {
 	force := c.Query("force")
 	isForce := force != ""
 
-	if globalName == "" || pkg == "" {
-		respError(c, 400, errors.New("globalName and pkg are required"))
+	if globalName == "" {
+		respError(c, 400, errors.New("globalName is required"))
 		return
 	}
+
+	pkg = strings.TrimLeft(pkg, "/")
 
 	projectDir := path.Join(os.TempDir(), pkg)
 	outDir := path.Join(projectDir, "out")
