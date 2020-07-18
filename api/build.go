@@ -18,6 +18,11 @@ import (
 
 var pkgReg = regexp.MustCompile("^((?:@([^/]+?)[/])?[^/]+?)(@[^/]+?)?$")
 
+var (
+	reScoped = regexp.MustCompile("^(@[^/]+/[^/@]+)(?:/([^@]+))?(?:@([^/]+))?")
+	reNormal = regexp.MustCompile("^([^/@]+)(?:/([^@]+))?(?:@([^/]+))?")
+)
+
 func respError(c *gin.Context, status int, err error) {
 	c.JSON(status, gin.H{
 		"error": err.Error(),
@@ -28,8 +33,30 @@ func logError(err error, prefix string) {
 	log.Printf("error %s %s\n", prefix, err.Error())
 }
 
-func removePkgVersion(pkg string) string {
-	return pkgReg.ReplaceAllString(pkg, "$1")
+func parsePkgName(pkg string) [3]string {
+	var matched []string
+
+	if strings.HasPrefix(pkg, "@") {
+		matched = reScoped.FindStringSubmatch(pkg)
+	} else {
+		matched = reNormal.FindStringSubmatch(pkg)
+	}
+
+	return [3]string{matched[1], matched[2], matched[3]}
+}
+
+func getInstallPkg(parsed [3]string) string {
+	if parsed[2] == "" {
+		return parsed[0]
+	}
+	return fmt.Sprintf("%s@%s", parsed[0], parsed[2])
+}
+
+func getRequiredPkg(parsed [3]string) string {
+	if parsed[1] == "" {
+		return parsed[0]
+	}
+	return fmt.Sprintf("%s/%s", parsed[0], parsed[1])
 }
 
 func Build(c *gin.Context) {
@@ -78,7 +105,14 @@ func Build(c *gin.Context) {
 		return
 	}
 	log.Printf("node version %s\n", out)
-	cmd := exec.Command("yarn", "add", pkg)
+
+	parsedPkg := parsePkgName(pkg)
+	installName := getInstallPkg(parsedPkg)
+	requireName := getRequiredPkg(parsedPkg)
+
+	log.Printf("pkg %s install %s require %s\n", pkg, installName, requireName)
+
+	cmd := exec.Command("yarn", "add", installName)
 	cmd.Dir = projectDir
 	_, err = cmd.Output()
 	if err != nil {
@@ -88,7 +122,7 @@ func Build(c *gin.Context) {
 	}
 
 	inputFile := path.Join(projectDir, "input.js")
-	input := fmt.Sprintf("module.exports = require('%s')", removePkgVersion(pkg))
+	input := fmt.Sprintf("module.exports = require('%s')", requireName)
 	ioutil.WriteFile(inputFile, []byte(input), os.ModePerm)
 
 	result := api.Build(api.BuildOptions{
