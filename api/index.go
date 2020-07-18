@@ -53,9 +53,16 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	// Install the package
 	log.Println("Installing", pkg, "in", outDir)
+	c := exec.Command("node", "--version")
+	out, err := c.Output()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	log.Println(out)
 	cmd := exec.Command("yarn", "add", pkg)
 	cmd.Dir = projectDir
-	_, err := cmd.Output()
+	_, err = cmd.Output()
 	if err != nil {
 		log.Println("failed to install pkg", err)
 		return
