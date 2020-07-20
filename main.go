@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/egoist/esbuild-service/api"
 	"github.com/egoist/esbuild-service/builder"
 	"github.com/egoist/esbuild-service/logger"
@@ -14,6 +17,10 @@ func main() {
 
 	r.GET("/build/*pkg", api.CreateBuildHandler(b))
 
-	logger.Logger.Info("Open http://localhost:8080")
-	logger.Logger.Fatal(r.Run(":8080"))
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	url := fmt.Sprintf("localhost:%s", port)
+	logger.Logger.Fatal(r.Run(url))
 }
