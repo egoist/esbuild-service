@@ -24,7 +24,7 @@ go build
 
 ## Docs
 
-### Config
+### Environment variables
 
 - `PORT`: Server port, defaults to `8080`.
 
