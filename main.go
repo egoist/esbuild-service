@@ -21,6 +21,6 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	url := fmt.Sprintf("localhost:%s", port)
-	logger.Logger.Fatal(r.Run(url))
+	addr := fmt.Sprintf(":%s", port)
+	logger.Logger.Fatal(r.Run(addr))
 }
