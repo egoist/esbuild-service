@@ -38,7 +38,7 @@ Build an npm package, `pkg` can be:
 
 Query parameters:
 
-- `format`: Bundle format, defaults to `cjs`, available values: `esm`, `iife`
+- `format`: Bundle format, defaults to `esm`, available values: `cjs`, `iife`
 - `globalName`: Global variable name for `iife` bundle.
 
 ## TODO

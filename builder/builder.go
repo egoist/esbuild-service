@@ -108,10 +108,10 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 	input := fmt.Sprintf("module.exports = require('%s')", requireName)
 	ioutil.WriteFile(inputFile, []byte(input), os.ModePerm)
 
-	format := api.FormatCommonJS
+	format := api.FormatESModule
 	switch options.Format {
-	case "esm":
-		format = api.FormatESModule
+	case "cjs":
+		format = api.FormatCommonJS
 	case "iife":
 		format = api.FormatIIFE
 	default:
