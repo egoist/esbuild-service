@@ -22,11 +22,13 @@ func CreateBuildHandler(b *builder.Builder) gin.HandlerFunc {
 		force := strings.TrimSpace(c.Query("force"))
 		isForce := force != ""
 		Format := c.Query("format")
+		Platform := c.Query("platform")
 
 		content, err := b.Build(&builder.BuildOptions{
 			Pkg:        Pkg,
 			GlobalName: GlobalName,
 			Format:     Format,
+			Platform:   Platform,
 		}, isForce)
 
 		if err != nil {

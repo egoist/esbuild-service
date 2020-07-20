@@ -68,6 +68,7 @@ type BuildOptions struct {
 	Pkg        string
 	GlobalName string
 	Format     string
+	Platform   string
 }
 
 type projectOptions struct {
@@ -118,6 +119,11 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 		// nothing
 	}
 
+	platform := api.PlatformBrowser
+	if options.Platform == "node" {
+		platform = api.PlatformNode
+	}
+
 	result := api.Build(api.BuildOptions{
 		EntryPoints:       []string{inputFile},
 		Outdir:            project.OutDir,
@@ -129,6 +135,7 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 		MinifySyntax:      true,
 		MinifyWhitespace:  true,
 		Format:            format,
+		Platform:          platform,
 	})
 
 	if len(result.Errors) > 0 {
