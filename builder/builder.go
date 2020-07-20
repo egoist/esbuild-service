@@ -59,14 +59,28 @@ func pathExists(p string) bool {
 	return !os.IsNotExist(err)
 }
 
+// Builder is a struct
 type Builder struct {
 	g singleflight.Group
 }
 
-func (b *Builder) build(pkg, globalName, projectDir, outDir, outFile string) (interface{}, error) {
-	log.Printf("trigger build %s, %s", pkg, time.Now())
+type BuildOptions struct {
+	Pkg        string
+	GlobalName string
+	Format     string
+}
+
+type projectOptions struct {
+	OutDir     string
+	OutFile    string
+	ProjectDir string
+}
+
+// build without cache
+func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (interface{}, error) {
+	log.Printf("trigger build %s, %s", options.Pkg, time.Now())
 	// Install the package
-	log.Println("Installing", pkg, "in", outDir)
+	log.Println("Installing", options.Pkg, "in", project.OutDir)
 	cc := exec.Command("node", "--version")
 	out, err := cc.Output()
 	if err != nil {
@@ -75,34 +89,46 @@ func (b *Builder) build(pkg, globalName, projectDir, outDir, outFile string) (in
 	}
 	log.Printf("node version %s\n", out)
 
-	parsedPkg := parsePkgName(pkg)
+	parsedPkg := parsePkgName(options.Pkg)
 	installName := getInstallPkg(parsedPkg)
 	requireName := getRequiredPkg(parsedPkg)
 
-	log.Printf("pkg %s install %s require %s\n", pkg, installName, requireName)
+	log.Printf("pkg %s install %s require %s\n", options.Pkg, installName, requireName)
 
+	log.Printf("install in %s", project.ProjectDir)
 	cmd := exec.Command("yarn", "add", installName)
-	cmd.Dir = projectDir
+	cmd.Dir = project.ProjectDir
 	_, err = cmd.Output()
 	if err != nil {
 		logError(err, "failed to install pkg")
 		return nil, err
 	}
 
-	inputFile := path.Join(projectDir, "input.js")
+	inputFile := path.Join(project.ProjectDir, "input.js")
 	input := fmt.Sprintf("module.exports = require('%s')", requireName)
 	ioutil.WriteFile(inputFile, []byte(input), os.ModePerm)
 
+	format := api.FormatCommonJS
+	switch options.Format {
+	case "esm":
+		format = api.FormatESModule
+	case "iife":
+		format = api.FormatIIFE
+	default:
+		// nothing
+	}
+
 	result := api.Build(api.BuildOptions{
 		EntryPoints:       []string{inputFile},
-		Outdir:            outDir,
+		Outdir:            project.OutDir,
 		Bundle:            true,
 		Write:             false,
-		GlobalName:        globalName,
+		GlobalName:        options.GlobalName,
 		LogLevel:          api.LogLevelInfo,
 		MinifyIdentifiers: true,
 		MinifySyntax:      true,
 		MinifyWhitespace:  true,
+		Format:            format,
 	})
 
 	if len(result.Errors) > 0 {
@@ -113,7 +139,7 @@ func (b *Builder) build(pkg, globalName, projectDir, outDir, outFile string) (in
 
 	// write out files
 	go func() {
-		err := ioutil.WriteFile(outFile, result.OutputFiles[0].Contents, os.ModePerm)
+		err := ioutil.WriteFile(project.OutFile, result.OutputFiles[0].Contents, os.ModePerm)
 		if err != nil {
 			log.Printf("write out file error: %+v\n", err)
 		}
@@ -121,8 +147,9 @@ func (b *Builder) build(pkg, globalName, projectDir, outDir, outFile string) (in
 	return result.OutputFiles[0].Contents, nil
 }
 
-func (b *Builder) Build(pkg, globalName string, isForce bool) (interface{}, error) {
-	key := fmt.Sprintf("%s-%s", pkg, globalName)
+// Build reads file from cache or starts a fresh build
+func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error) {
+	key := fmt.Sprintf("%s-%s-%s", options.Pkg, options.GlobalName, options.Format)
 
 	projectDir := path.Join(os.TempDir(), key)
 	outDir := path.Join(projectDir, "out")
@@ -145,7 +172,11 @@ func (b *Builder) Build(pkg, globalName string, isForce bool) (interface{}, erro
 	}
 
 	content, err, _ := b.g.Do(key, func() (interface{}, error) {
-		return b.build(pkg, globalName, projectDir, outDir, outFile)
+		return b.buildFresh(options, &projectOptions{
+			ProjectDir: projectDir,
+			OutDir:     outDir,
+			OutFile:    outFile,
+		})
 	})
 
 	return content, err

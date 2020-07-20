@@ -1,7 +1,6 @@
 package api
 
 import (
-	"errors"
 	"strings"
 
 	"github.com/egoist/esbuild-service/builder"
@@ -14,21 +13,24 @@ func respError(c *gin.Context, status int, err error) {
 	})
 }
 
-func CreateBuildHandler(builder *builder.Builder) gin.HandlerFunc {
+func CreateBuildHandler(b *builder.Builder) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		globalName := strings.TrimSpace(c.Query("globalName"))
-		pkg := c.Param("pkg")
-		pkg = strings.TrimLeft(pkg, "/")
+		GlobalName := strings.TrimSpace(c.Query("globalName"))
+		Pkg := c.Param("pkg")
+		Pkg = strings.TrimLeft(Pkg, "/")
 		// force rebuild
 		force := strings.TrimSpace(c.Query("force"))
 		isForce := force != ""
-
-		if globalName == "" {
-			respError(c, 400, errors.New("globalName is required"))
-			return
+		Format := c.Query("format")
+		if Format == "" {
+			Format = "esm"
 		}
 
-		content, err := builder.Build(pkg, globalName, isForce)
+		content, err := b.Build(&builder.BuildOptions{
+			Pkg:        Pkg,
+			GlobalName: GlobalName,
+			Format:     Format,
+		}, isForce)
 
 		if err != nil {
 			respError(c, 500, err)
