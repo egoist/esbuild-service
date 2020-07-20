@@ -136,6 +136,9 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 		MinifyWhitespace:  true,
 		Format:            format,
 		Platform:          platform,
+		Defines:           map[string]string{
+		"process.env.NODE_ENV": "\"production\"",
+		},
 	})
 
 	if len(result.Errors) > 0 {
