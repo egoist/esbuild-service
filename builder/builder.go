@@ -69,6 +69,7 @@ type BuildOptions struct {
 	GlobalName string
 	Format     string
 	Platform   string
+	IsMinify   bool
 }
 
 type projectOptions struct {
@@ -107,9 +108,9 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 		Write:             false,
 		GlobalName:        options.GlobalName,
 		LogLevel:          api.LogLevelInfo,
-		MinifyIdentifiers: true,
-		MinifySyntax:      true,
-		MinifyWhitespace:  true,
+		MinifyIdentifiers: options.IsMinify,
+		MinifySyntax:      options.IsMinify,
+		MinifyWhitespace:  options.IsMinify,
 		Format:            format,
 		Platform:          platform,
 		Externals: []string{
