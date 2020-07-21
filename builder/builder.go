@@ -40,13 +40,6 @@ func parsePkgName(pkg string) [3]string {
 	return [3]string{matched[1], matched[2], matched[3]}
 }
 
-func getInstallPkg(parsed [3]string) string {
-	if parsed[2] == "" {
-		return parsed[0]
-	}
-	return fmt.Sprintf("%s@%s", parsed[0], parsed[2])
-}
-
 func getRequiredPkg(parsed [3]string) string {
 	if parsed[1] == "" {
 		return parsed[0]
@@ -132,10 +125,21 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 
 // Build starts a fresh build and install the package if it doesn't exist
 func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error) {
-	// TODO: the key should be actual package name + actual package version
 	// We need to send a request to npm registry to find out the version first
-	key := fmt.Sprintf("%s", options.Pkg)
+	parsedPkg := parsePkgName(options.Pkg)
+	requireName := getRequiredPkg(parsedPkg)
+	version := parsedPkg[2]
+	if version == "" {
+		version = "latest"
+	}
+	pkgVersion, err := getPkgMatchVersion(parsedPkg[0], version)
+	if err != nil {
+		logError(err, fmt.Sprintf("failed to get pkg match version: %s", options.Pkg))
+		return nil, err
+	}
 
+	installName := fmt.Sprintf("%s@%s", parsedPkg[0], pkgVersion)
+	key := fmt.Sprintf("%s-%s", parsedPkg[0], pkgVersion)
 	cacheDir := path.Join(os.TempDir(), "esbuild-service-cache")
 	projectDir := path.Join(cacheDir, key)
 	outDir := path.Join(projectDir, "out")
@@ -144,7 +148,7 @@ func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error
 		os.MkdirAll(outDir, os.ModePerm)
 	}
 
-	_, err, _ := b.g.Do("init", func() (i interface{}, err error) {
+	_, err, _ = b.g.Do("init", func() (i interface{}, err error) {
 		if !pathExists(path.Join(cacheDir, "package.json")) {
 			log.Println("Installing node-browser-libs")
 			cmd := exec.Command("yarn", "add",
@@ -179,10 +183,6 @@ func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error
 	if err != nil {
 		return nil, err
 	}
-
-	parsedPkg := parsePkgName(options.Pkg)
-	installName := getInstallPkg(parsedPkg)
-	requireName := getRequiredPkg(parsedPkg)
 
 	inputFile, err, _ := b.g.Do(key, func() (interface{}, error) {
 		// Install the package if not already install
