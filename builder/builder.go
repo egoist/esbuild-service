@@ -72,46 +72,18 @@ type BuildOptions struct {
 }
 
 type projectOptions struct {
-	OutDir     string
-	OutFile    string
-	ProjectDir string
+	OutDir      string
+	OutFile     string
+	ProjectDir  string
+	RequireName string
 }
 
 // build without cache
 func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (interface{}, error) {
 	log.Printf("trigger build %s, %s", options.Pkg, time.Now())
-	// Install the package
-	log.Println("Installing", options.Pkg, "in", project.OutDir)
-	cc := exec.Command("node", "--version")
-	out, err := cc.Output()
-	if err != nil {
-		logError(err, "get node version")
-		return nil, err
-	}
-	log.Printf("node version %s\n", out)
-
-	parsedPkg := parsePkgName(options.Pkg)
-	installName := getInstallPkg(parsedPkg)
-	requireName := getRequiredPkg(parsedPkg)
-
-	log.Printf("pkg %s install %s require %s\n", options.Pkg, installName, requireName)
-
-	log.Printf("install in %s", project.ProjectDir)
-
-	cmd := exec.Command(
-		"yarn",
-		"add",
-		installName,
-	)
-	cmd.Dir = project.ProjectDir
-	_, err = cmd.Output()
-	if err != nil {
-		logError(err, "failed to install pkg")
-		return nil, err
-	}
 
 	inputFile := path.Join(project.ProjectDir, "input.js")
-	input := fmt.Sprintf("module.exports = require('%s')", requireName)
+	input := fmt.Sprintf("module.exports = require('%s')", project.RequireName)
 	ioutil.WriteFile(inputFile, []byte(input), os.ModePerm)
 
 	format := api.FormatESModule
@@ -168,9 +140,11 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 	return result.OutputFiles[0].Contents, nil
 }
 
-// Build reads file from cache or starts a fresh build
+// Build starts a fresh build and install the package if it doesn't exist
 func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error) {
-	key := fmt.Sprintf("%s-%s-%s", options.Pkg, options.GlobalName, options.Format)
+	// TODO: the key should be actual package name + actual package version
+	// We need to send a request to npm registry to find out the version first
+	key := fmt.Sprintf("%s", options.Pkg)
 
 	cacheDir := path.Join(os.TempDir(), "esbuild-service-cache")
 	projectDir := path.Join(cacheDir, key)
@@ -210,22 +184,46 @@ func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error
 
 	outFile := path.Join(outDir, "input.js")
 
-	// cache
-	if !isForce && pathExists(outFile) {
-		content, err := ioutil.ReadFile(outFile)
+	parsedPkg := parsePkgName(options.Pkg)
+	installName := getInstallPkg(parsedPkg)
+	requireName := getRequiredPkg(parsedPkg)
+
+	// Install the package if not already install
+	if isForce || !pathExists(outFile) {
+		// Install the package
+		log.Println("Installing", options.Pkg, "in", outDir)
+		cc := exec.Command("node", "--version")
+		out, err := cc.Output()
 		if err != nil {
-			logError(err, "open cache file error")
+			logError(err, "get node version")
 			return nil, err
 		}
-		log.Printf("return cached file: %s\n", outFile)
-		return content, nil
+		log.Printf("node version %s\n", out)
+
+		log.Printf("pkg %s install %s require %s\n", options.Pkg, installName, requireName)
+
+		log.Printf("install in %s", projectDir)
+
+		cmd := exec.Command(
+			"yarn",
+			"add",
+			installName,
+		)
+		cmd.Dir = projectDir
+		_, err = cmd.Output()
+		if err != nil {
+			logError(err, "failed to install pkg")
+			return nil, err
+		}
+
 	}
 
 	content, err, _ := b.g.Do(key, func() (interface{}, error) {
 		return b.buildFresh(options, &projectOptions{
-			ProjectDir: projectDir,
-			OutDir:     outDir,
-			OutFile:    outFile,
+			ProjectDir:  projectDir,
+			OutDir:      outDir,
+			OutFile:     outFile,
+			RequireName: requireName,
 		})
 	})
 
