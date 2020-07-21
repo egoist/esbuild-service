@@ -97,7 +97,12 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 	log.Printf("pkg %s install %s require %s\n", options.Pkg, installName, requireName)
 
 	log.Printf("install in %s", project.ProjectDir)
-	cmd := exec.Command("yarn", "add", installName)
+
+	cmd := exec.Command(
+		"yarn",
+		"add",
+		installName,
+	)
 	cmd.Dir = project.ProjectDir
 	_, err = cmd.Output()
 	if err != nil {
@@ -136,8 +141,14 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 		MinifyWhitespace:  true,
 		Format:            format,
 		Platform:          platform,
-		Defines:           map[string]string{
-		"process.env.NODE_ENV": "\"production\"",
+		Externals: []string{
+			// exclude modules that don't make sense in browser
+			"fs",
+			"os",
+			"fsevents",
+		},
+		Defines: map[string]string{
+			"process.env.NODE_ENV": "\"production\"",
 		},
 	})
 
@@ -161,11 +172,40 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error) {
 	key := fmt.Sprintf("%s-%s-%s", options.Pkg, options.GlobalName, options.Format)
 
-	projectDir := path.Join(os.TempDir(), key)
+	cacheDir := path.Join(os.TempDir(), "esbuild-service-cache")
+	projectDir := path.Join(cacheDir, key)
 	outDir := path.Join(projectDir, "out")
 
 	if !pathExists(outDir) {
 		os.MkdirAll(outDir, os.ModePerm)
+	}
+
+	if !pathExists(path.Join(cacheDir, "package.json")) {
+		cmd := exec.Command("yarn", "add",
+			"assert@^1.1.1",
+			"buffer",
+			"crypto@npm:crypto-browserify",
+			"events",
+			"path@npm:path-browserify",
+			"process",
+			"punycode",
+			"querystring@npm:querystring-es3",
+			"stream@npm:stream-browserify",
+			"string_decoder",
+			"http@npm:stream-http",
+			"https@npm:https-browserify",
+			"tty@npm:tty-browserify",
+			"url",
+			"util",
+			"vm@npm:vm-browserify",
+			"zlib@npm:browserify-zlib@^0.2.0",
+		)
+		cmd.Dir = cacheDir
+		_, err := cmd.Output()
+		if err != nil {
+			logError(err, "failed to install browser-node-libs")
+			return nil, err
+		}
 	}
 
 	outFile := path.Join(outDir, "input.js")
