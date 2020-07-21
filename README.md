@@ -10,6 +10,8 @@ curl -sf https://gobinaries.com/egoist/esbuild-service | sh
 
 Then `esbuild-service` command will be available.
 
+The first time you send a request will be slow because it needs to install a few npm package to shim Node.js built-in modules. 
+
 ## Development
 
 ```bash
