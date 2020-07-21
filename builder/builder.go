@@ -73,7 +73,6 @@ type BuildOptions struct {
 
 type projectOptions struct {
 	OutDir      string
-	OutFile     string
 	ProjectDir  string
 	RequireName string
 }
@@ -130,13 +129,6 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 		return nil, errors.New(string(e))
 	}
 
-	// write out files
-	go func() {
-		err := ioutil.WriteFile(project.OutFile, result.OutputFiles[0].Contents, os.ModePerm)
-		if err != nil {
-			log.Printf("write out file error: %+v\n", err)
-		}
-	}()
 	return result.OutputFiles[0].Contents, nil
 }
 
@@ -155,6 +147,7 @@ func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error
 	}
 
 	if !pathExists(path.Join(cacheDir, "package.json")) {
+		log.Println("Installing node-browser-libs")
 		cmd := exec.Command("yarn", "add",
 			"assert@^1.1.1",
 			"buffer",
@@ -182,35 +175,36 @@ func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error
 		}
 	}
 
-	outFile := path.Join(outDir, "input.js")
-
 	parsedPkg := parsePkgName(options.Pkg)
 	installName := getInstallPkg(parsedPkg)
 	requireName := getRequiredPkg(parsedPkg)
 
 	// Install the package if not already install
-	if isForce || !pathExists(outFile) {
+	if isForce || !pathExists(path.Join(projectDir, "node_modules")) {
 		// Install the package
 		log.Println("Installing", options.Pkg, "in", outDir)
-		cc := exec.Command("node", "--version")
-		out, err := cc.Output()
-		if err != nil {
-			logError(err, "get node version")
-			return nil, err
-		}
-		log.Printf("node version %s\n", out)
 
 		log.Printf("pkg %s install %s require %s\n", options.Pkg, installName, requireName)
 
 		log.Printf("install in %s", projectDir)
 
-		cmd := exec.Command(
+		// Use `yarn init -y` to create a package.json file
+		// Otherwise the package will be installed in parent directory
+		yarnInit := exec.Command("yarn", "init", "-y")
+		yarnInit.Dir = projectDir
+		_, err := yarnInit.Output()
+		if err != nil {
+			logError(err, "failed to run yarn init")
+			return nil, err
+		}
+
+		yarnAdd := exec.Command(
 			"yarn",
 			"add",
 			installName,
 		)
-		cmd.Dir = projectDir
-		_, err = cmd.Output()
+		yarnAdd.Dir = projectDir
+		_, err = yarnAdd.Output()
 		if err != nil {
 			logError(err, "failed to install pkg")
 			return nil, err
@@ -222,7 +216,6 @@ func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error
 		return b.buildFresh(options, &projectOptions{
 			ProjectDir:  projectDir,
 			OutDir:      outDir,
-			OutFile:     outFile,
 			RequireName: requireName,
 		})
 	})
