@@ -16,11 +16,11 @@ The first time you send a request will be slow because it needs to install a few
 
 ```bash
 # Start server
-go run main.go
+make run
 # the open http://localhost:8080
 
 # Build
-go build
+make build
 # then run `./esbuilds-service`
 ```
 

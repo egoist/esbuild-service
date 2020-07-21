@@ -1,3 +1,4 @@
 /esbuild-service
 .idea
 ./bin
+.DS_Store

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/egoist/esbuild-service/util"
 	"strings"
 
 	"github.com/egoist/esbuild-service/builder"
@@ -23,12 +24,18 @@ func CreateBuildHandler(b *builder.Builder) gin.HandlerFunc {
 		isForce := force != ""
 		Format := c.Query("format")
 		Platform := c.Query("platform")
+		Minify := c.Query("minify")
+		var enableMinify = true
+		if Minify != "" {
+			enableMinify = util.StrToBool(Minify)
+		}
 
 		content, err := b.Build(&builder.BuildOptions{
 			Pkg:        Pkg,
 			GlobalName: GlobalName,
 			Format:     Format,
 			Platform:   Platform,
+			IsMinify:   enableMinify,
 		}, isForce)
 
 		if err != nil {
