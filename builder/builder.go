@@ -73,6 +73,7 @@ type BuildOptions struct {
 }
 
 type projectOptions struct {
+	InputFile   string
 	OutDir      string
 	ProjectDir  string
 	RequireName string
@@ -81,10 +82,6 @@ type projectOptions struct {
 // build without cache
 func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (interface{}, error) {
 	log.Printf("trigger build %s, %s", options.Pkg, time.Now())
-
-	inputFile := path.Join(project.ProjectDir, "input.js")
-	input := fmt.Sprintf("module.exports = require('%s')", project.RequireName)
-	ioutil.WriteFile(inputFile, []byte(input), os.ModePerm)
 
 	format := api.FormatESModule
 	switch options.Format {
@@ -102,7 +99,7 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 	}
 
 	result := api.Build(api.BuildOptions{
-		EntryPoints:       []string{inputFile},
+		EntryPoints:       []string{project.InputFile},
 		Outdir:            project.OutDir,
 		Bundle:            true,
 		Write:             false,
@@ -143,85 +140,99 @@ func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error
 	projectDir := path.Join(cacheDir, key)
 	outDir := path.Join(projectDir, "out")
 
-	if !pathExists(outDir) {
-		os.MkdirAll(outDir, os.ModePerm)
-	}
-
-	if !pathExists(path.Join(cacheDir, "package.json")) {
-		log.Println("Installing node-browser-libs")
-		cmd := exec.Command("yarn", "add",
-			"assert@^1.1.1",
-			"buffer",
-			"crypto@npm:crypto-browserify",
-			"events",
-			"path@npm:path-browserify",
-			"process",
-			"punycode",
-			"querystring@npm:querystring-es3",
-			"stream@npm:stream-browserify",
-			"string_decoder",
-			"http@npm:stream-http",
-			"https@npm:https-browserify",
-			"tty@npm:tty-browserify",
-			"url",
-			"util",
-			"vm@npm:vm-browserify",
-			"zlib@npm:browserify-zlib@^0.2.0",
-		)
-		cmd.Dir = cacheDir
-		_, err := cmd.Output()
-		if err != nil {
-			logError(err, "failed to install browser-node-libs")
-			return nil, err
+	_, err, _ := b.g.Do("init", func() (i interface{}, err error) {
+		if !pathExists(path.Join(cacheDir, "package.json")) {
+			log.Println("Installing node-browser-libs")
+			cmd := exec.Command("yarn", "add",
+				"assert@^1.1.1",
+				"buffer",
+				"crypto@npm:crypto-browserify",
+				"events",
+				"path@npm:path-browserify",
+				"process",
+				"punycode",
+				"querystring@npm:querystring-es3",
+				"stream@npm:stream-browserify",
+				"string_decoder",
+				"http@npm:stream-http",
+				"https@npm:https-browserify",
+				"tty@npm:tty-browserify",
+				"url",
+				"util",
+				"vm@npm:vm-browserify",
+				"zlib@npm:browserify-zlib@^0.2.0",
+			)
+			cmd.Dir = cacheDir
+			_, err := cmd.Output()
+			if err != nil {
+				logError(err, "failed to install browser-node-libs")
+				return nil, err
+			}
 		}
+		return nil, nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	parsedPkg := parsePkgName(options.Pkg)
 	installName := getInstallPkg(parsedPkg)
 	requireName := getRequiredPkg(parsedPkg)
 
-	// Install the package if not already install
-	if isForce || !pathExists(path.Join(projectDir, "node_modules")) {
-		// Install the package
-		log.Println("Installing", options.Pkg, "in", outDir)
+	inputFile, err, _ := b.g.Do(key, func() (interface{}, error) {
+		if !pathExists(outDir) {
+			os.MkdirAll(outDir, os.ModePerm)
+		}
+		// Install the package if not already install
+		if isForce || !pathExists(path.Join(projectDir, "node_modules")) {
+			// Install the package
+			log.Println("Installing", options.Pkg, "in", outDir)
 
-		log.Printf("pkg %s install %s require %s\n", options.Pkg, installName, requireName)
+			log.Printf("pkg %s install %s require %s\n", options.Pkg, installName, requireName)
 
-		log.Printf("install in %s", projectDir)
+			log.Printf("install in %s", projectDir)
 
-		// Use `yarn init -y` to create a package.json file
-		// Otherwise the package will be installed in parent directory
-		yarnInit := exec.Command("yarn", "init", "-y")
-		yarnInit.Dir = projectDir
-		_, err := yarnInit.Output()
-		if err != nil {
-			logError(err, "failed to run yarn init")
-			return nil, err
+			// Use `yarn init -y` to create a package.json file
+			// Otherwise the package will be installed in parent directory
+			yarnInit := exec.Command("yarn", "init", "-y")
+			yarnInit.Dir = projectDir
+			_, err := yarnInit.Output()
+			if err != nil {
+				logError(err, "failed to run yarn init")
+				return nil, err
+			}
+
+			yarnAdd := exec.Command(
+				"yarn",
+				"add",
+				installName,
+			)
+			yarnAdd.Dir = projectDir
+			_, err = yarnAdd.Output()
+			if err != nil {
+				logError(err, "failed to install pkg")
+				return nil, err
+			}
+
 		}
 
-		yarnAdd := exec.Command(
-			"yarn",
-			"add",
-			installName,
-		)
-		yarnAdd.Dir = projectDir
-		_, err = yarnAdd.Output()
-		if err != nil {
-			logError(err, "failed to install pkg")
-			return nil, err
-		}
-
-	}
-
-	content, err, _ := b.g.Do(key, func() (interface{}, error) {
-		return b.buildFresh(options, &projectOptions{
-			ProjectDir:  projectDir,
-			OutDir:      outDir,
-			RequireName: requireName,
-		})
+		inputFile := path.Join(projectDir, "input.js")
+		input := fmt.Sprintf("module.exports = require('%s')", requireName)
+		ioutil.WriteFile(inputFile, []byte(input), os.ModePerm)
+		return inputFile, nil
 	})
 
-	return content, err
+	if err != nil {
+		return nil, err
+	}
+
+	return b.buildFresh(options, &projectOptions{
+		ProjectDir:  projectDir,
+		OutDir:      outDir,
+		RequireName: requireName,
+		InputFile:   inputFile.(string),
+	})
 }
 
 func NewBuilder() *Builder {
