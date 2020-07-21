@@ -140,6 +140,10 @@ func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error
 	projectDir := path.Join(cacheDir, key)
 	outDir := path.Join(projectDir, "out")
 
+	if !pathExists(outDir) {
+		os.MkdirAll(outDir, os.ModePerm)
+	}
+
 	_, err, _ := b.g.Do("init", func() (i interface{}, err error) {
 		if !pathExists(path.Join(cacheDir, "package.json")) {
 			log.Println("Installing node-browser-libs")
@@ -181,9 +185,6 @@ func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error
 	requireName := getRequiredPkg(parsedPkg)
 
 	inputFile, err, _ := b.g.Do(key, func() (interface{}, error) {
-		if !pathExists(outDir) {
-			os.MkdirAll(outDir, os.ModePerm)
-		}
 		// Install the package if not already install
 		if isForce || !pathExists(path.Join(projectDir, "node_modules")) {
 			// Install the package
