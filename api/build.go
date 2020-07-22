@@ -1,8 +1,9 @@
 package api
 
 import (
-	"github.com/egoist/esbuild-service/util"
 	"strings"
+
+	"github.com/egoist/esbuild-service/util"
 
 	"github.com/egoist/esbuild-service/builder"
 	"github.com/gin-gonic/gin"
