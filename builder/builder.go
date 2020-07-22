@@ -8,43 +8,18 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/egoist/esbuild-service/logger"
+	"github.com/egoist/esbuild-service/util"
 	"github.com/evanw/esbuild/pkg/api"
 	"golang.org/x/sync/singleflight"
 )
 
 var log = logger.Logger
 
-var (
-	reScoped = regexp.MustCompile("^(@[^/]+/[^/@]+)(?:/([^@]+))?(?:@([^/]+))?")
-	reNormal = regexp.MustCompile("^([^/@]+)(?:/([^@]+))?(?:@([^/]+))?")
-)
-
 func logError(err error, prefix string) {
 	log.Errorf("error %s %s\n", prefix, err.Error())
-}
-
-func parsePkgName(pkg string) [3]string {
-	var matched []string
-
-	if strings.HasPrefix(pkg, "@") {
-		matched = reScoped.FindStringSubmatch(pkg)
-	} else {
-		matched = reNormal.FindStringSubmatch(pkg)
-	}
-
-	return [3]string{matched[1], matched[2], matched[3]}
-}
-
-func getRequiredPkg(parsed [3]string) string {
-	if parsed[1] == "" {
-		return parsed[0]
-	}
-	return fmt.Sprintf("%s/%s", parsed[0], parsed[1])
 }
 
 func pathExists(p string) bool {
@@ -63,6 +38,8 @@ type BuildOptions struct {
 	Format     string
 	Platform   string
 	IsMinify   bool
+	ParsedPkg  [3]string
+	PkgVersion string
 }
 
 type projectOptions struct {
@@ -125,18 +102,9 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 
 // Build starts a fresh build and install the package if it doesn't exist
 func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error) {
-	// We need to send a request to npm registry to find out the version first
-	parsedPkg := parsePkgName(options.Pkg)
-	requireName := getRequiredPkg(parsedPkg)
-	version := parsedPkg[2]
-	if version == "" {
-		version = "latest"
-	}
-	pkgVersion, err := getPkgMatchVersion(parsedPkg[0], version)
-	if err != nil {
-		logError(err, fmt.Sprintf("failed to get pkg match version: %s", options.Pkg))
-		return nil, err
-	}
+	parsedPkg := options.ParsedPkg
+	requireName := util.GetRequiredPkg(parsedPkg)
+	pkgVersion := options.PkgVersion
 
 	installName := fmt.Sprintf("%s@%s", parsedPkg[0], pkgVersion)
 	key := fmt.Sprintf("%s-%s", parsedPkg[0], pkgVersion)
@@ -148,7 +116,7 @@ func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error
 		os.MkdirAll(outDir, os.ModePerm)
 	}
 
-	_, err, _ = b.g.Do("init", func() (i interface{}, err error) {
+	_, err, _ := b.g.Do("init", func() (i interface{}, err error) {
 		if !pathExists(path.Join(cacheDir, "package.json")) {
 			log.Println("Installing node-browser-libs")
 			cmd := exec.Command("yarn", "add",

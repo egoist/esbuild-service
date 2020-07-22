@@ -13,7 +13,7 @@ var (
 	ErrNoMatchVersion = errors.New("no match version")
 )
 
-func getPkgMatchVersion(pkgName, pkgVersion string) (v string, err error) {
+func GetPkgMatchVersion(pkgName, pkgVersion string) (v string, err error) {
 	cmd := exec.Command("yarn", "info", pkgName, "--json")
 	out, err := cmd.Output()
 	if err != nil {
