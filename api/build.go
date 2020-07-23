@@ -49,7 +49,8 @@ func CreateBuildHandler(b *builder.Builder) gin.HandlerFunc {
 		// redirect to exact matched version
 		if pkgVersion != version {
 			matchedPkg := fmt.Sprintf("%s%s@%s", parsedPkg[0], parsedPkg[1], pkgVersion)
-			url := strings.Replace(c.Request.URL.String(), Pkg, matchedPkg, 1)
+
+			url := fmt.Sprintf("/build/%s?%s", matchedPkg, c.Request.URL.RawQuery)
 			log.Infof("redirect to %s", url)
 			c.Redirect(302, url)
 			return
