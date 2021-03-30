@@ -24,10 +24,57 @@ func CreateBuildHandler(b *builder.Builder) gin.HandlerFunc {
 		Pkg := c.Param("pkg")
 
 		if Pkg == "/" {
+			c.Header("content-type", "text/html")
 			c.String(http.StatusOK, `
-	USAGE:	https://esbuild.egoist.sh/{pkg}
 
-	REPO:   https://github.com/egoist/esbuild-service
+	<meta charset="utf-8">
+	<style>
+	body {
+		font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif,Apple Color Emoji,Segoe UI Emoji;
+		padding: 20px;
+	}
+
+	.link {
+		color: #000;
+		text-decoration: none;
+	}
+
+	.link:hover {
+		color: blue;
+	}
+
+	.label {
+		color: #555;
+		font-weight: bold;
+		min-width: 140px;
+		display: inline-block;
+	}
+
+	p {
+		margin: 20px 0;
+	}
+	</style>
+
+	<h1>esbuild</h1>
+
+	<p style="margin-bottom:30px">Bundle npm packages in ESM / CJS format on the fly.</p>
+
+	<p>
+	<span class="label">USAGE:</span>https://esbuild.vercel.app/{pkg}
+	</p>
+
+	<p>
+
+	<p>
+	<span class="label">EXAMPLE:</span><a class="link" href="/remark@13">remark@13</a>
+	<a class="link" href="/chalk">chalk</a>
+	</p>
+
+	<p>
+	<span class="label">MORE USAGES:</span><a class="link" href="https://github.com/egoist/esbuild-service">https://github.com/egoist/esbuild-service</a>
+	</p>
+
+	<span class="label">SUPPORT:</span><a class="link" href="https://github.com/sponsors/egoist">💖 Become a sponsor on GitHub</a>
 		`)
 			return
 		}
