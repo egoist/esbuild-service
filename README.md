@@ -10,13 +10,15 @@ curl -sf https://gobinaries.com/egoist/esbuild-service | sh
 
 Then `esbuild-service` command will be available.
 
-The first time you send a request will be slow because it needs to install a few npm package to shim Node.js built-in modules.
+## How does this work
+
+This service uses esbuild to bundle dependecies, we convert package names to [skypack.dev](https://skypack.dev) URLs to retrive the content on the fly.
 
 ## Development
 
 ```bash
 # Start server
-make run
+air
 # the open http://localhost:8080
 
 # Build
