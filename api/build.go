@@ -68,8 +68,8 @@ func CreateBuildHandler(b *builder.Builder) gin.HandlerFunc {
 	<p>
 
 	<p>
-	<span class="label">EXAMPLE:</span><a class="link" href="/remark@13">remark@13</a>
-	<a class="link" href="/chalk">chalk</a>
+	<span class="label">EXAMPLE:</span><a class="link" href="/lodash@4.17.21/debounce?minify=false">lodash/debounce (no minification)</a>
+	&nbsp;&nbsp;<a class="link" href="/chalk">chalk (minified)</a>
 	</p>
 
 	<p>
