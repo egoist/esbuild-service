@@ -10,7 +10,7 @@ curl -sf https://gobinaries.com/egoist/esbuild-service | sh
 
 Then `esbuild-service` command will be available.
 
-The first time you send a request will be slow because it needs to install a few npm package to shim Node.js built-in modules. 
+The first time you send a request will be slow because it needs to install a few npm package to shim Node.js built-in modules.
 
 ## Development
 
@@ -30,22 +30,18 @@ make build
 
 - `PORT`: Server port, defaults to `8080`.
 
-### `/build/*pkg`
+### `/*pkg`
 
 Build an npm package, `pkg` can be:
 
 - A bare name like `vue`
 - Name with version: `vue@3.0.0-rc.1`
-- Name, version and a file path: `preact/compact@10.0.0`
+- Name, version and a file path: `preact@10/compact`
 
 Query parameters:
 
 - `format`: Bundle format, defaults to `esm`, available values: `cjs`, `iife`
 - `globalName`: Global variable name for `iife` bundle.
-
-## TODO
-
-Support version range, e.g. `vue@^2` should automatically use the latest version that satifies the version range.
 
 ## License
 

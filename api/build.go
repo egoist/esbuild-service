@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/egoist/esbuild-service/builder"
@@ -20,8 +21,18 @@ func respError(c *gin.Context, status int, err error) {
 
 func CreateBuildHandler(b *builder.Builder) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		GlobalName := strings.TrimSpace(c.Query("globalName"))
 		Pkg := c.Param("pkg")
+
+		if Pkg == "/" {
+			c.String(http.StatusOK, `
+	USAGE:	https://esbuild.egoist.sh/{pkg}
+
+	REPO:   https://github.com/egoist/esbuild-service
+		`)
+			return
+		}
+
+		GlobalName := strings.TrimSpace(c.Query("globalName"))
 		Pkg = strings.TrimLeft(Pkg, "/")
 		// force rebuild
 		force := strings.TrimSpace(c.Query("force"))
@@ -34,12 +45,18 @@ func CreateBuildHandler(b *builder.Builder) gin.HandlerFunc {
 			enableMinify = util.StrToBool(Minify)
 		}
 
-		parsedPkg := util.ParsePkgName(Pkg)
-		version := parsedPkg[2]
+		parsedPkg, err := util.ParsePkgName(Pkg)
+		if err != nil {
+			respError(c, 400, err)
+			return
+		}
+
+		version := parsedPkg.Version
 		if version == "" {
 			version = "latest"
 		}
-		pkgVersion, err := builder.GetPkgMatchVersion(parsedPkg[0], version)
+
+		pkgVersion, err := builder.GetPkgMatchVersion(parsedPkg.Name, version)
 		if err != nil {
 			log.Errorf("failed to get pkg match version: %s, error: %s", Pkg, err.Error())
 			respError(c, 400, err)
@@ -48,9 +65,12 @@ func CreateBuildHandler(b *builder.Builder) gin.HandlerFunc {
 
 		// redirect to exact matched version
 		if pkgVersion != version {
-			matchedPkg := fmt.Sprintf("%s%s@%s", parsedPkg[0], parsedPkg[1], pkgVersion)
+			matchedPkg := fmt.Sprintf("%s@%s%s", parsedPkg.Name, pkgVersion, parsedPkg.Filename)
 
-			url := fmt.Sprintf("/build/%s?%s", matchedPkg, c.Request.URL.RawQuery)
+			url := "/" + matchedPkg
+			if c.Request.URL.RawQuery != "" {
+				url += "?" + c.Request.URL.RawQuery
+			}
 			log.Infof("redirect to %s", url)
 			c.Redirect(302, url)
 			return

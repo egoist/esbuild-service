@@ -3,7 +3,8 @@ package builder
 import (
 	"errors"
 	"fmt"
-	"os/exec"
+	"io/ioutil"
+	"net/http"
 
 	"github.com/Masterminds/semver"
 	"github.com/tidwall/gjson"
@@ -14,14 +15,24 @@ var (
 )
 
 func GetPkgMatchVersion(pkgName, pkgVersion string) (v string, err error) {
-	cmd := exec.Command("yarn", "info", pkgName, "--json")
-	out, err := cmd.Output()
+	fmt.Println("Getting exact version for", pkgName, pkgVersion)
+	resp, err := http.Get("https://registry.npmjs.org/" + pkgName)
+
+	if err != nil {
+		return
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+
 	if err != nil {
 		return
 	}
 
 	// version by dist tag
-	distTag := gjson.GetBytes(out, fmt.Sprintf("data.%s.%s", "dist-tags", pkgVersion))
+	distTag := gjson.GetBytes(body, fmt.Sprintf("%s.%s", "dist-tags", pkgVersion))
+
 	if distTag.String() != "" {
 		return distTag.String(), nil
 	}
@@ -30,17 +41,22 @@ func GetPkgMatchVersion(pkgName, pkgVersion string) (v string, err error) {
 	if err != nil {
 		return
 	}
-	versions := gjson.GetBytes(out, "data.versions").Array()
-	for _, value := range versions {
-		vv := value.String()
+	versions := gjson.GetBytes(body, "versions")
+
+	versions.ForEach(func(key, value gjson.Result) bool {
+		vv := key.String()
 		version, err := semver.NewVersion(vv)
 		if err != nil {
-			continue
+			return true
 		}
+
 		if c.Check(version) {
 			v = vv
+			return false
 		}
-	}
+		return true
+	})
+
 	if v == "" {
 		err = ErrNoMatchVersion
 	}

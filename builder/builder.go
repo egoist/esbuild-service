@@ -3,11 +3,11 @@ package builder
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
-	"os/exec"
-	"path"
+	"regexp"
 	"time"
 
 	"github.com/egoist/esbuild-service/logger"
@@ -38,19 +38,88 @@ type BuildOptions struct {
 	Format     string
 	Platform   string
 	IsMinify   bool
-	ParsedPkg  [3]string
+	ParsedPkg  util.ParsedPkgPathname
 	PkgVersion string
 }
 
-type projectOptions struct {
-	InputFile   string
-	OutDir      string
-	ProjectDir  string
-	RequireName string
+var httpPlugin = api.Plugin{
+	Name: "http",
+	Setup: func(build api.PluginBuild) {
+		build.OnResolve(api.OnResolveOptions{Filter: ".*"}, func(args api.OnResolveArgs) (api.OnResolveResult, error) {
+			// Conver package name to skypack cdn address
+			matched, err := regexp.Match(`^[a-z@_]`, []byte(args.Path))
+			if err != nil {
+				return api.OnResolveResult{}, err
+			}
+			if matched {
+				return api.OnResolveResult{
+					Path:      "https://cdn.skypack.dev/" + args.Path,
+					Namespace: "http-url",
+				}, nil
+			}
+			return api.OnResolveResult{}, nil
+		})
+
+		// Intercept import paths starting with "http:" and "https:" so
+		// esbuild doesn't attempt to map them to a file system location.
+		// Tag them with the "http-url" namespace to associate them with
+		// this plugin.
+		build.OnResolve(api.OnResolveOptions{Filter: `^https?://`},
+			func(args api.OnResolveArgs) (api.OnResolveResult, error) {
+				return api.OnResolveResult{
+					Path:      args.Path,
+					Namespace: "http-url",
+				}, nil
+			})
+
+		// We also want to intercept all import paths inside downloaded
+		// files and resolve them against the original URL. All of these
+		// files will be in the "http-url" namespace. Make sure to keep
+		// the newly resolved URL in the "http-url" namespace so imports
+		// inside it will also be resolved as URLs recursively.
+		build.OnResolve(api.OnResolveOptions{Filter: ".*", Namespace: "http-url"},
+			func(args api.OnResolveArgs) (api.OnResolveResult, error) {
+				base, err := url.Parse(args.Importer)
+				if err != nil {
+					return api.OnResolveResult{}, err
+				}
+				relative, err := url.Parse(args.Path)
+				if err != nil {
+					return api.OnResolveResult{}, err
+				}
+				return api.OnResolveResult{
+					Path:      base.ResolveReference(relative).String(),
+					Namespace: "http-url",
+				}, nil
+			})
+
+		// When a URL is loaded, we want to actually download the content
+		// from the internet. This has just enough logic to be able to
+		// handle the example import from unpkg.com but in reality this
+		// would probably need to be more complex.
+		build.OnLoad(api.OnLoadOptions{Filter: ".*", Namespace: "http-url"},
+			func(args api.OnLoadArgs) (api.OnLoadResult, error) {
+				println("Load", args.Path)
+				res, err := http.Get(args.Path)
+				if err != nil {
+					return api.OnLoadResult{}, err
+				}
+				defer res.Body.Close()
+				bytes, err := ioutil.ReadAll(res.Body)
+				if err != nil {
+					return api.OnLoadResult{}, err
+				}
+				contents := string(bytes)
+				if res.StatusCode < 200 || res.StatusCode >= 300 {
+					return api.OnLoadResult{}, errors.New(contents)
+				}
+				return api.OnLoadResult{Contents: &contents}, nil
+			})
+	},
 }
 
 // build without cache
-func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (interface{}, error) {
+func (b *Builder) buildFresh(options *BuildOptions) (interface{}, error) {
 	log.Printf("trigger build %s, %s", options.Pkg, time.Now())
 
 	format := api.FormatESModule
@@ -69,8 +138,8 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 	}
 
 	result := api.Build(api.BuildOptions{
-		EntryPoints:       []string{project.InputFile},
-		Outdir:            project.OutDir,
+		EntryPoints:       []string{options.Pkg},
+		Outdir:            "/dist",
 		Bundle:            true,
 		Write:             false,
 		GlobalName:        options.GlobalName,
@@ -80,15 +149,16 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 		MinifyWhitespace:  options.IsMinify,
 		Format:            format,
 		Platform:          platform,
-		Externals: []string{
+		External: []string{
 			// exclude modules that don't make sense in browser
 			"fs",
 			"os",
 			"fsevents",
 		},
-		Defines: map[string]string{
+		Define: map[string]string{
 			"process.env.NODE_ENV": "\"production\"",
 		},
+		Plugins: []api.Plugin{httpPlugin},
 	})
 
 	if len(result.Errors) > 0 {
@@ -102,106 +172,7 @@ func (b *Builder) buildFresh(options *BuildOptions, project *projectOptions) (in
 
 // Build starts a fresh build and install the package if it doesn't exist
 func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error) {
-	parsedPkg := options.ParsedPkg
-	requireName := util.GetRequiredPkg(parsedPkg)
-	pkgVersion := options.PkgVersion
-
-	installName := fmt.Sprintf("%s@%s", parsedPkg[0], pkgVersion)
-	key := fmt.Sprintf("%s-%s", parsedPkg[0], pkgVersion)
-	cacheDir := path.Join(os.TempDir(), "esbuild-service-cache")
-	projectDir := path.Join(cacheDir, key)
-	outDir := path.Join(projectDir, "out")
-
-	if !pathExists(outDir) {
-		os.MkdirAll(outDir, os.ModePerm)
-	}
-
-	_, err, _ := b.g.Do("init", func() (i interface{}, err error) {
-		if !pathExists(path.Join(cacheDir, "package.json")) {
-			log.Println("Installing node-browser-libs")
-			cmd := exec.Command("yarn", "add",
-				"assert@^1.1.1",
-				"buffer",
-				"crypto@npm:crypto-browserify",
-				"events",
-				"path@npm:path-browserify",
-				"process",
-				"punycode",
-				"querystring@npm:querystring-es3",
-				"stream@npm:stream-browserify",
-				"string_decoder",
-				"http@npm:stream-http",
-				"https@npm:https-browserify",
-				"tty@npm:tty-browserify",
-				"url",
-				"util",
-				"vm@npm:vm-browserify",
-				"zlib@npm:browserify-zlib@^0.2.0",
-			)
-			cmd.Dir = cacheDir
-			_, err := cmd.Output()
-			if err != nil {
-				logError(err, "failed to install browser-node-libs")
-				return nil, err
-			}
-		}
-		return nil, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	inputFile, err, _ := b.g.Do(key, func() (interface{}, error) {
-		// Install the package if not already install
-		if isForce || !pathExists(path.Join(projectDir, "node_modules")) {
-			// Install the package
-			log.Println("Installing", options.Pkg, "in", outDir)
-
-			log.Printf("pkg %s install %s require %s\n", options.Pkg, installName, requireName)
-
-			log.Printf("install in %s", projectDir)
-
-			// Use `yarn init -y` to create a package.json file
-			// Otherwise the package will be installed in parent directory
-			yarnInit := exec.Command("yarn", "init", "-y")
-			yarnInit.Dir = projectDir
-			_, err := yarnInit.Output()
-			if err != nil {
-				logError(err, "failed to run yarn init")
-				return nil, err
-			}
-
-			yarnAdd := exec.Command(
-				"yarn",
-				"add",
-				installName,
-			)
-			yarnAdd.Dir = projectDir
-			_, err = yarnAdd.Output()
-			if err != nil {
-				logError(err, "failed to install pkg")
-				return nil, err
-			}
-
-		}
-
-		inputFile := path.Join(projectDir, "input.js")
-		input := fmt.Sprintf("module.exports = require('%s')", requireName)
-		ioutil.WriteFile(inputFile, []byte(input), os.ModePerm)
-		return inputFile, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return b.buildFresh(options, &projectOptions{
-		ProjectDir:  projectDir,
-		OutDir:      outDir,
-		RequireName: requireName,
-		InputFile:   inputFile.(string),
-	})
+	return b.buildFresh(options)
 }
 
 func NewBuilder() *Builder {

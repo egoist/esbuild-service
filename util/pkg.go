@@ -1,26 +1,39 @@
 package util
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
-	"strings"
 )
 
-var (
-	reScoped = regexp.MustCompile("^(@[^/]+/[^/@]+)(?:/([^@]+))?(?:@([^/]+))?")
-	reNormal = regexp.MustCompile("^([^/@]+)(?:/([^@]+))?(?:@([^/]+))?")
-)
+var pkgPathnameRe = regexp.MustCompile("^((?:@[^/@]+/)?[^/@]+)(?:@([^/]+))?(/.*)?$")
 
-func ParsePkgName(pkg string) [3]string {
-	var matched []string
+type ParsedPkgPathname struct {
+	Name     string
+	Version  string
+	Spec     string
+	Filename string
+}
 
-	if strings.HasPrefix(pkg, "@") {
-		matched = reScoped.FindStringSubmatch(pkg)
-	} else {
-		matched = reNormal.FindStringSubmatch(pkg)
+func ParsePkgName(pkg string) (parsed ParsedPkgPathname, err error) {
+	m := pkgPathnameRe.FindStringSubmatch(pkg)
+
+	if m == nil {
+		err = errors.New("Invaliad package name")
+		return
 	}
 
-	return [3]string{matched[1], matched[2], matched[3]}
+	name := m[1]
+	version := m[2]
+
+	parsed = ParsedPkgPathname{
+		Name:     name,
+		Version:  version,
+		Filename: m[3],
+		Spec:     name + "@" + version,
+	}
+
+	return
 }
 
 func GetRequiredPkg(parsed [3]string) string {

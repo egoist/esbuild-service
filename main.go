@@ -15,7 +15,7 @@ func main() {
 
 	b := builder.NewBuilder()
 
-	r.GET("/build/*pkg", api.CreateBuildHandler(b))
+	r.GET("/*pkg", api.CreateBuildHandler(b))
 
 	port := os.Getenv("PORT")
 	if port == "" {
