@@ -44,6 +44,7 @@ Query parameters:
 
 - `format`: Bundle format, defaults to `esm`, available values: `cjs`, `iife`
 - `globalName`: Global variable name for `iife` bundle.
+- `minify`: Minification, default to `true`.
 
 ## License
 
