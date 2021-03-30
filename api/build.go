@@ -55,6 +55,8 @@ func CreateBuildHandler(b *builder.Builder) gin.HandlerFunc {
 	}
 	</style>
 
+	<title>esbuild service</title>
+
 	<h1>esbuild</h1>
 
 	<p style="margin-bottom:30px">Bundle npm packages in ESM / CJS format on the fly.</p>
