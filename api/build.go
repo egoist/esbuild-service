@@ -81,6 +81,8 @@ func CreateBuildHandler(b *builder.Builder) gin.HandlerFunc {
 			return
 		}
 
+		c.Header("Access-Control-Allow-Origin", "*")
+
 		GlobalName := strings.TrimSpace(c.Query("globalName"))
 		Pkg = strings.TrimLeft(Pkg, "/")
 		// force rebuild
