@@ -95,3 +95,13 @@ func CreateBuildHandler(b *builder.Builder) gin.HandlerFunc {
 		c.Writer.Write(content.([]byte))
 	}
 }
+
+func Handler(w http.ResponseWriter, r *http.Request) {
+	g := gin.Default()
+
+	b := builder.NewBuilder()
+
+	g.GET("/*pkg", CreateBuildHandler(b))
+
+	g.ServeHTTP(w, r)
+}

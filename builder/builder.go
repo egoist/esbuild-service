@@ -172,6 +172,7 @@ func (b *Builder) buildFresh(options *BuildOptions) (interface{}, error) {
 
 // Build starts a fresh build and install the package if it doesn't exist
 func (b *Builder) Build(options *BuildOptions, isForce bool) (interface{}, error) {
+	// TODO cache result
 	return b.buildFresh(options)
 }
 
